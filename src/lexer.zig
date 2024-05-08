@@ -32,7 +32,7 @@ pub fn scan(lexer: *Lexer) void {
         't' => return if (match(lexer, "rue")) makeError(lexer, "Unknown value") else makeToken(lexer, tk.Token.False),
         'n' => return if (match(lexer, "null")) makeError(lexer, "Unknown value") else makeToken(lexer, tk.Token.False),
         '"' => return string(lexer),
-        else => makeError(lexer, "Unexpected character."),
+        else => return makeError(lexer, "Unexpected character."),
     }
 }
 
