@@ -17,6 +17,12 @@ export const TokenError = struct {
 };
 
 pub fn scan(lexer: *Lexer) void {
+    skipWhitespace(lexer);
+
+    lexer.start = lexer.current;
+
+    if (isAtEnd(lexer)) makeToken(lexer, tk.TokenType.Eof);
+
     const c: char = advance(lexer);
 
     if (isDigit(c)) return number(lexer);
@@ -33,6 +39,29 @@ pub fn scan(lexer: *Lexer) void {
         'n' => return if (match(lexer, "null")) makeError(lexer, "Unknown value") else makeToken(lexer, tk.Token.False),
         '"' => return string(lexer),
         else => return makeError(lexer, "Unexpected character."),
+    }
+}
+
+fn skipWhitespace(lexer: *Lexer) void {
+    while (true) {
+        switch (peek(lexer)) {
+            ' ', '\r', '\t' => {
+                advance_(lexer);
+                break;
+            },
+            '\n' => {
+                lexer.line += 1;
+                advance_(lexer);
+            },
+            '/' => {
+                if (peekNext(lexer)) {
+                    while (peek(lexer) != '\n' and !isAtEnd(lexer)) advance_(lexer);
+                } else {
+                    break;
+                }
+            },
+            else => break,
+        }
     }
 }
 

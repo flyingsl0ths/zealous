@@ -13,6 +13,7 @@ export const TokenType = enum {
     String,
     Number,
     Error,
+    Eof,
 };
 
 export const Token = struct {
