@@ -1,6 +1,7 @@
-const tk = @import("./token.zig");
 const std = @import("std");
-const char = char;
+
+const tk = @import("./token.zig");
+pub const char = u8;
 
 export const Lexer = struct {
     current: usize,
@@ -16,7 +17,21 @@ export const TokenError = struct {
     type_: tk.TokenType,
 };
 
-pub fn scan(lexer: *Lexer) void {
+pub const LexerResult = union(enum) {
+    tokenError: TokenError,
+    token: tk.Token,
+};
+
+pub fn init(source: []char) Lexer {
+    return struct {
+        current: 0,
+        lexeme: source,
+        line: 0,
+        start: 0,
+    };
+}
+
+pub fn scan(lexer: *Lexer) LexerResult {
     skipWhitespace(lexer);
 
     lexer.start = lexer.current;
@@ -54,10 +69,8 @@ fn skipWhitespace(lexer: *Lexer) void {
                 advance_(lexer);
             },
             '/' => {
-                if (peekNext(lexer)) {
-                    while (peek(lexer) != '\n' and !isAtEnd(lexer)) advance_(lexer);
-                } else {
-                    break;
+                if (peekNext(lexer) == '/') {
+                    return makeError(lexer, "Comments are not permitted in JSON.");
                 }
             },
             else => break,
@@ -74,7 +87,7 @@ fn isDigit(ch: char) bool {
     return ch >= '0' and ch <= '9';
 }
 
-fn number(lexer: *Lexer) tk.Token {
+fn number(lexer: *Lexer) LexerResult {
     while (isDigit(peek(lexer))) advance_(lexer);
 
     if (peek(lexer) == '.' and isDigit(peekNext(lexer))) {
@@ -93,14 +106,14 @@ fn advance_(lexer: *Lexer) void {
     lexer.current += 1;
 }
 
-fn makeToken(lexer: *Lexer, type_: tk.TokenType) tk.Token {
-    return .{
+fn makeToken(lexer: *Lexer, type_: tk.TokenType) LexerResult {
+    return .{ .token = .{
         .column = lexer.current,
         .length = lexer.current - lexer.start,
         .line = lexer.line,
         .start = lexer.start,
         .type_ = type_,
-    };
+    } };
 }
 
 fn match(lexer: *Lexer, substring: []char) bool {
@@ -109,7 +122,7 @@ fn match(lexer: *Lexer, substring: []char) bool {
     return current == substring;
 }
 
-fn string(lexer: *Lexer) tk.Token {
+fn string(lexer: *Lexer) LexerResult {
     while (peek(lexer) != '"' and !isAtEnd(lexer)) {
         if (foundNewLine(lexer)) {
             lexer.line += 1;
@@ -138,11 +151,11 @@ fn foundNewLine(lexer: *const Lexer) bool {
         std.mem.eql([]char, lexer.lexeme[lexer.current .. lexer.current + 1], "\r\n"));
 }
 
-fn makeError(lexer: *Lexer, cause: []char) TokenError {
-    return .{
+fn makeError(lexer: *Lexer, cause: []char) LexerResult {
+    return .{ .tokenError = .{
         .cause = cause,
         .column = lexer.start,
         .line = lexer.line,
         .type_ = tk.TokenType.Error,
-    };
+    } };
 }
