@@ -1,4 +1,4 @@
-export const TokenType = enum {
+pub const TokenType = enum {
     // Structural
     LeftBrace,
     RightBrace,
@@ -16,7 +16,7 @@ export const TokenType = enum {
     Eof,
 };
 
-export const Token = struct {
+pub const Token = struct {
     column: usize,
     length: usize,
     line: usize,

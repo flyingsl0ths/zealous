@@ -1,17 +1,19 @@
 const std = @import("std");
 
 const tk = @import("./token.zig");
-pub const char = u8;
 
-export const Lexer = struct {
+pub const char = u8;
+pub const str = [:0]const char;
+
+const Lexer = struct {
     current: usize,
-    lexeme: []char,
+    lexeme: str,
     line: usize,
     start: usize,
 };
 
-export const TokenError = struct {
-    cause: []char,
+const TokenError = struct {
+    cause: str,
     column: usize,
     line: usize,
     type_: tk.TokenType,
@@ -22,12 +24,12 @@ pub const LexerResult = union(enum) {
     token: tk.Token,
 };
 
-pub fn init(source: []char) Lexer {
-    return struct {
-        current: 0,
-        lexeme: source,
-        line: 0,
-        start: 0,
+pub fn init(source: str) Lexer {
+    return .{
+        .current = 0,
+        .lexeme = source,
+        .line = 1,
+        .start = 0,
     };
 }
 
@@ -36,7 +38,7 @@ pub fn scan(lexer: *Lexer) LexerResult {
 
     lexer.start = lexer.current;
 
-    if (isAtEnd(lexer)) makeToken(lexer, tk.TokenType.Eof);
+    if (isAtEnd(lexer)) return makeToken(lexer, tk.TokenType.Eof);
 
     const c: char = advance(lexer);
 
@@ -49,9 +51,9 @@ pub fn scan(lexer: *Lexer) LexerResult {
         ']' => return makeToken(lexer, tk.TokenType.RightBracket),
         ',' => return makeToken(lexer, tk.TokenType.Comma),
         ':' => return makeToken(lexer, tk.TokenType.Colon),
-        'f' => return if (match(lexer, "alse")) makeError(lexer, "Unknown value") else makeToken(lexer, tk.Token.False),
-        't' => return if (match(lexer, "rue")) makeError(lexer, "Unknown value") else makeToken(lexer, tk.Token.False),
-        'n' => return if (match(lexer, "null")) makeError(lexer, "Unknown value") else makeToken(lexer, tk.Token.False),
+        'f' => return if (match(lexer, "alse")) makeError(lexer, "Unknown value") else makeToken(lexer, tk.TokenType.False),
+        't' => return if (match(lexer, "rue")) makeError(lexer, "Unknown value") else makeToken(lexer, tk.TokenType.False),
+        'n' => return if (match(lexer, "null")) makeError(lexer, "Unknown value") else makeToken(lexer, tk.TokenType.False),
         '"' => return string(lexer),
         else => return makeError(lexer, "Unexpected character."),
     }
@@ -70,7 +72,7 @@ fn skipWhitespace(lexer: *Lexer) void {
             },
             '/' => {
                 if (peekNext(lexer) == '/') {
-                    return makeError(lexer, "Comments are not permitted in JSON.");
+                    return;
                 }
             },
             else => break,
@@ -95,7 +97,7 @@ fn number(lexer: *Lexer) LexerResult {
         while (isDigit(peek(lexer))) advance_(lexer);
     }
 
-    return makeToken(lexer, tk.Token.Number);
+    return makeToken(lexer, tk.TokenType.Number);
 }
 
 fn peekNext(lexer: *const Lexer) char {
@@ -116,10 +118,10 @@ fn makeToken(lexer: *Lexer, type_: tk.TokenType) LexerResult {
     } };
 }
 
-fn match(lexer: *Lexer, substring: []char) bool {
+fn match(lexer: *Lexer, substring: []const char) bool {
     const current = lexer.lexeme[lexer.start..lexer.current];
 
-    return current == substring;
+    return std.mem.eql(char, current, substring);
 }
 
 fn string(lexer: *Lexer) LexerResult {
@@ -132,9 +134,9 @@ fn string(lexer: *Lexer) LexerResult {
 
     if (isAtEnd(lexer)) return makeError(lexer, "Unterminated string");
 
-    advance(lexer);
+    advance_(lexer);
 
-    return makeToken(lexer, tk.Token.String);
+    return makeToken(lexer, tk.TokenType.String);
 }
 
 fn peek(lexer: *const Lexer) char {
@@ -148,14 +150,68 @@ fn isAtEnd(lexer: *const Lexer) bool {
 fn foundNewLine(lexer: *const Lexer) bool {
     return lexer.lexeme[lexer.current] == '\n' or
         (lexer.lexeme.len >= 2 and
-        std.mem.eql([]char, lexer.lexeme[lexer.current .. lexer.current + 1], "\r\n"));
+        std.mem.eql(char, lexer.lexeme[lexer.current .. lexer.current + 1], "\r\n"));
 }
 
-fn makeError(lexer: *Lexer, cause: []char) LexerResult {
+fn makeError(lexer: *Lexer, cause: str) LexerResult {
     return .{ .tokenError = .{
         .cause = cause,
         .column = lexer.start,
         .line = lexer.line,
         .type_ = tk.TokenType.Error,
     } };
+}
+
+test "Single tokenization" {
+    var lexr = init("{");
+    var expected: tk.Token = .{ .column = 1, .length = 1, .line = 1, .start = 0, .type_ = tk.TokenType.LeftBrace };
+
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, expected),
+        .tokenError => false,
+    });
+
+    lexr = init("}");
+    expected.type_ = tk.TokenType.RightBrace;
+
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, expected),
+        .tokenError => false,
+    });
+
+    lexr = init("[");
+    expected.type_ = tk.TokenType.LeftBracket;
+
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, expected),
+        .tokenError => false,
+    });
+
+    lexr = init("]");
+    expected.type_ = tk.TokenType.RightBracket;
+
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, expected),
+        .tokenError => false,
+    });
+
+    lexr = init(",");
+    expected.type_ = tk.TokenType.Comma;
+
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, expected),
+        .tokenError => false,
+    });
+
+    lexr = init(":");
+    expected.type_ = tk.TokenType.Colon;
+
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, expected),
+        .tokenError => false,
+    });
+}
+
+fn matches(result: tk.Token, expected: tk.Token) bool {
+    return result.column == expected.column and result.length == expected.length and result.length == expected.line and result.start == expected.start and result.type_ == expected.type_;
 }
