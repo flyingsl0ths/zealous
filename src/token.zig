@@ -17,7 +17,6 @@ pub const TokenType = enum {
 };
 
 pub const Token = struct {
-    column: usize,
     length: usize,
     line: usize,
     start: usize,

@@ -64,7 +64,6 @@ fn skipWhitespace(lexer: *Lexer) void {
         switch (peek(lexer)) {
             ' ', '\r', '\t' => {
                 advance_(lexer);
-                break;
             },
             '\n' => {
                 lexer.line += 1;
@@ -72,10 +71,15 @@ fn skipWhitespace(lexer: *Lexer) void {
             },
             '/' => {
                 if (peekNext(lexer) == '/') {
+                    while (peek(lexer) != '\n' and !isAtEnd(lexer)) {
+                        advance_(lexer);
+                    }
+                } else {
                     return;
                 }
+                break;
             },
-            else => break,
+            else => return,
         }
     }
 }
@@ -110,7 +114,6 @@ fn advance_(lexer: *Lexer) void {
 
 fn makeToken(lexer: *Lexer, type_: tk.TokenType) LexerResult {
     return .{ .token = .{
-        .column = lexer.current,
         .length = lexer.current - lexer.start,
         .line = lexer.line,
         .start = lexer.start,
@@ -164,7 +167,7 @@ fn makeError(lexer: *Lexer, cause: str) LexerResult {
 
 test "Single tokenization" {
     var lexr = init("{");
-    var expected: tk.Token = .{ .column = 1, .length = 1, .line = 1, .start = 0, .type_ = tk.TokenType.LeftBrace };
+    var expected: tk.Token = .{ .length = 1, .line = 1, .start = 0, .type_ = tk.TokenType.LeftBrace };
 
     try std.testing.expect(switch (scan(&lexr)) {
         .token => |token| matches(token, expected),
@@ -212,6 +215,20 @@ test "Single tokenization" {
     });
 }
 
+test "whitespace" {
+    var lexr = init(" \t\r\n");
+
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, .{
+            .length = 0,
+            .line = 2,
+            .start = 4,
+            .type_ = tk.TokenType.Eof,
+        }),
+        .tokenError => false,
+    });
+}
+
 fn matches(result: tk.Token, expected: tk.Token) bool {
-    return result.column == expected.column and result.length == expected.length and result.length == expected.line and result.start == expected.start and result.type_ == expected.type_;
+    return result.length == expected.length and result.line == expected.line and result.start == expected.start and result.type_ == expected.type_;
 }
