@@ -69,16 +69,6 @@ fn skipWhitespace(lexer: *Lexer) void {
                 lexer.line += 1;
                 advance_(lexer);
             },
-            '/' => {
-                if (peekNext(lexer) == '/') {
-                    while (peek(lexer) != '\n' and !isAtEnd(lexer)) {
-                        advance_(lexer);
-                    }
-                } else {
-                    return;
-                }
-                break;
-            },
             else => return,
         }
     }
