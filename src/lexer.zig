@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const tk = @import("./token.zig");
+const tk = @import("token.zig");
 
 pub const char = u8;
 pub const str = [:0]const char;
