@@ -44,6 +44,8 @@ pub fn scan(lexer: *Lexer) LexerResult {
 
     if (isDigit(c)) return number(lexer);
 
+    if (isAlpha(c)) return keyword(lexer);
+
     switch (c) {
         '{' => return makeToken(lexer, tk.TokenType.LeftBrace),
         '}' => return makeToken(lexer, tk.TokenType.RightBrace),
@@ -83,6 +85,10 @@ fn isDigit(ch: char) bool {
     return ch >= '0' and ch <= '9';
 }
 
+fn isAlpha(ch: char) bool {
+    return (ch >= 'a' and ch <= 'z') or (ch >= 'A' and ch <= 'Z');
+}
+
 fn number(lexer: *Lexer) LexerResult {
     while (isDigit(peek(lexer))) advance_(lexer);
 
@@ -92,6 +98,31 @@ fn number(lexer: *Lexer) LexerResult {
     }
 
     return makeToken(lexer, tk.TokenType.Number);
+}
+
+fn keyword(lexer: *Lexer) LexerResult {
+    while (isAlpha(peek(lexer))) advance_(lexer);
+
+    return switch (keywordType(lexer)) {
+        tk.TokenType.Error => makeError(lexer, "Value expected."),
+        else => |type_| makeToken(lexer, type_),
+    };
+}
+
+fn keywordType(lexer: *Lexer) tk.TokenType {
+    switch (lexer.lexeme[lexer.start]) {
+        'f' => return checkKeyword(lexer, 1, 4, "alse", tk.TokenType.False),
+        't' => return checkKeyword(lexer, 1, 3, "rue", tk.TokenType.True),
+        'n' => return checkKeyword(lexer, 1, 3, "ull", tk.TokenType.Null),
+        else => return tk.TokenType.Error,
+    }
+}
+
+fn checkKeyword(lexer: *Lexer, start: usize, length: usize, rest: str, type_: tk.TokenType) tk.TokenType {
+    const matched = lexer.current - lexer.start == start + length and
+        std.mem.eql(u8, lexer.lexeme[(lexer.start + start)..length], rest);
+
+    return if (matched) type_ else tk.TokenType.Error;
 }
 
 fn peekNext(lexer: *const Lexer) char {
