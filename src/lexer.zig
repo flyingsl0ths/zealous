@@ -53,9 +53,6 @@ pub fn scan(lexer: *Lexer) LexerResult {
         ']' => return makeToken(lexer, tk.TokenType.RightBracket),
         ',' => return makeToken(lexer, tk.TokenType.Comma),
         ':' => return makeToken(lexer, tk.TokenType.Colon),
-        'f' => return if (match(lexer, "alse")) makeError(lexer, "Unknown value") else makeToken(lexer, tk.TokenType.False),
-        't' => return if (match(lexer, "rue")) makeError(lexer, "Unknown value") else makeToken(lexer, tk.TokenType.False),
-        'n' => return if (match(lexer, "null")) makeError(lexer, "Unknown value") else makeToken(lexer, tk.TokenType.False),
         '"' => return string(lexer),
         else => return makeError(lexer, "Unexpected character."),
     }
