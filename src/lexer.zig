@@ -152,8 +152,8 @@ fn string(lexer: *Lexer) LexerResult {
     while (peek(lexer) != '"' and !isAtEnd(lexer)) {
         if (foundNewLine(lexer)) {
             lexer.line += 1;
-            advance_(lexer);
         }
+        advance_(lexer);
     }
 
     if (isAtEnd(lexer)) return makeError(lexer, "Unterminated string");
@@ -276,6 +276,35 @@ test "Literals" {
     try std.testing.expect(switch (scan(&lexr)) {
         .token => |token| matches(token, expected),
         .tokenError => false,
+    });
+}
+
+test "Strings" {
+    var lexr = init("\"h\"");
+    var expected: tk.Token = .{ .length = 3, .line = 1, .start = 0, .type_ = tk.TokenType.String };
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, expected),
+        .tokenError => false,
+    });
+
+    lexr = init("\"h\n\"");
+    expected = .{ .length = 4, .line = 2, .start = 0, .type_ = tk.TokenType.String };
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, expected),
+        .tokenError => false,
+    });
+
+    lexr = init("\"h\r\n\"");
+    expected = .{ .length = 5, .line = 2, .start = 0, .type_ = tk.TokenType.String };
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, expected),
+        .tokenError => false,
+    });
+
+    lexr = init("\"h");
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => false,
+        .tokenError => true,
     });
 }
 
