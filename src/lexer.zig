@@ -54,7 +54,10 @@ pub fn scan(lexer: *Lexer) LexerResult {
         ',' => return makeToken(lexer, tk.TokenType.Comma),
         ':' => return makeToken(lexer, tk.TokenType.Colon),
         '"' => return string(lexer),
-        '/' => return makeError(lexer, "Comments are not permitted in JSON."),
+        '/' => return if (peek(lexer) == '/')
+            makeError(lexer, "Comments are not permitted in JSON.")
+        else
+            makeError(lexer, "Expected JSON object, array or literal."),
         else => return makeError(lexer, "Expected JSON object, array or literal."),
     }
 }
