@@ -94,6 +94,8 @@ fn number(lexer: *Lexer) LexerResult {
 
     while (isDigit(peek(lexer))) advance_(lexer);
 
+    isFloat = peek(lexer) == '.';
+
     if (peek(lexer) == '.' and isDigit(peekNext(lexer))) {
         isFloat = true;
         advance_(lexer);
