@@ -11,7 +11,8 @@ pub const TokenType = enum {
     False,
     Null,
     String,
-    Number,
+    Int,
+    Float,
     Error,
     Eof,
 };
