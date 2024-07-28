@@ -87,14 +87,17 @@ fn isAlpha(ch: char) bool {
 }
 
 fn number(lexer: *Lexer) LexerResult {
+    var isFloat = false;
     while (isDigit(peek(lexer))) advance_(lexer);
+
+    isFloat = peek(lexer) == '.';
 
     if (peek(lexer) == '.' and isDigit(peekNext(lexer))) {
         advance_(lexer);
         while (isDigit(peek(lexer))) advance_(lexer);
     }
 
-    return makeToken(lexer, tk.TokenType.Number);
+    return makeToken(lexer, if (isFloat) tk.TokenType.Float else tk.TokenType.Int);
 }
 
 fn literal(lexer: *Lexer) LexerResult {
@@ -233,7 +236,7 @@ test "Single tokenization" {
     });
 }
 
-test "whitespace" {
+test "Whitespace" {
     var lexr = init(" \t\r\n");
 
     try std.testing.expect(switch (scan(&lexr)) {
@@ -270,6 +273,23 @@ test "Literals" {
 
     expected = .{ .length = 4, .line = 1, .start = 0, .type_ = tk.TokenType.Null };
 
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, expected),
+        .tokenError => false,
+    });
+}
+
+test "Numbers" {
+    var lexr = init("1");
+    var expected: tk.Token = .{ .length = 1, .line = 1, .start = 0, .type_ = tk.TokenType.Int };
+
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, expected),
+        .tokenError => false,
+    });
+
+    lexr = init("1.0");
+    expected = .{ .length = 3, .line = 1, .start = 0, .type_ = tk.TokenType.Float };
     try std.testing.expect(switch (scan(&lexr)) {
         .token => |token| matches(token, expected),
         .tokenError => false,
