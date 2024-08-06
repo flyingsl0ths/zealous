@@ -11,7 +11,7 @@ const ParserResult = union(enum) {
 
 const ParserError = std.fmt.ParseIntError || std.fmt.ParseFloatError || std.heap.Allocator.Error;
 
-pub fn parse(source: lexer.str) ParserError!object.Value {
+pub fn parse(source: lexer.str) ParserError!ParserResult {
     const lexr = lexer.Lexer.init(source);
 
     const gpa = std.heap.GeneralPurposeAllocator(.{}){};
