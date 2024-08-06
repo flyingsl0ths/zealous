@@ -120,7 +120,7 @@ fn literal(lexer: *Lexer) LexerResult {
     while (isAlpha(peek(lexer))) advance_(lexer);
 
     return switch (literalType(lexer)) {
-        tk.TokenType.Error => makeError(lexer, "Value expected."),
+        tk.TokenType.Error => makeError(lexer, "Expected JSON object, array or literal."),
         else => |type_| makeToken(lexer, type_),
     };
 }
