@@ -172,7 +172,7 @@ fn string(lexer: *Lexer) LexerResult {
         advance_(lexer);
     }
 
-    if (isAtEnd(lexer)) return makeError(lexer, "Unterminated string");
+    if (isAtEnd(lexer)) return makeError(lexer, "Unexpected end of string.");
 
     advance_(lexer);
 
