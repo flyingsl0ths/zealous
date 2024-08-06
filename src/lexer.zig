@@ -166,6 +166,7 @@ fn match(lexer: *Lexer, substring: []const char) bool {
 
 fn string(lexer: *Lexer) LexerResult {
     while (peek(lexer) != '"' and !isAtEnd(lexer)) {
+        // TODO: Add support for escape sequences.
         if (peek(lexer) == '\n') {
             lexer.line += 1;
         }
