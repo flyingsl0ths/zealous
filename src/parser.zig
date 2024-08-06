@@ -9,6 +9,12 @@ const ParserResult = union(enum) {
 
 pub fn parse(source: lexer.str) ParserResult {
     const lexr = lexer.Lexer.init(source);
+
+    const gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+
+    defer allocator.deinit();
+
     switch (lexer.scan(&lexr)) {
         .tokenError => |err| {
             return ParserResult{ .err = err };
@@ -27,7 +33,7 @@ pub fn parse(source: lexer.str) ParserResult {
                 },
                 .String => {
                     const str = source[tk.start..tk.length];
-                    return object.Value{ .string = str };
+                    return object.Value{ .string = copyString(allocator, str) };
                 },
                 .True => {
                     return object.Value{ .boolean = true };
@@ -41,4 +47,11 @@ pub fn parse(source: lexer.str) ParserResult {
             }
         },
     }
+}
+
+fn copyString(allocator: *std.heap.Allocator, str: lexer.str) std.heap.Allocator.Error!lexer.str {
+    const len = str.len;
+    const copy = try allocator.alloc(u8, len);
+    std.mem.copyForwards(copy, str.ptr, len);
+    return copy;
 }
