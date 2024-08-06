@@ -166,7 +166,7 @@ fn match(lexer: *Lexer, substring: []const char) bool {
 
 fn string(lexer: *Lexer) LexerResult {
     while (peek(lexer) != '"' and !isAtEnd(lexer)) {
-        if (foundNewLine(lexer)) {
+        if (peek(lexer) == '\n') {
             lexer.line += 1;
         }
         advance_(lexer);
@@ -185,12 +185,6 @@ fn peek(lexer: *const Lexer) char {
 
 fn isAtEnd(lexer: *const Lexer) bool {
     return lexer.current == lexer.lexeme.len;
-}
-
-fn foundNewLine(lexer: *const Lexer) bool {
-    return lexer.lexeme[lexer.current] == '\n' or
-        (lexer.lexeme.len >= 2 and
-        std.mem.eql(char, lexer.lexeme[lexer.current .. lexer.current + 1], "\r\n"));
 }
 
 fn makeError(lexer: *Lexer, cause: str) LexerResult {
