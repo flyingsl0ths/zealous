@@ -4,15 +4,16 @@ const tk = @import("token.zig");
 
 pub const char = u8;
 pub const str = [:0]const char;
+pub const DEFAULT_ERROR = "Expected JSON object, array or literal.";
 
-const Lexer = struct {
+pub const Lexer = struct {
     current: usize,
     lexeme: str,
     line: usize,
     start: usize,
 };
 
-const TokenError = struct {
+pub const TokenError = struct {
     cause: str,
     column: usize,
     line: usize,
@@ -57,8 +58,8 @@ pub fn scan(lexer: *Lexer) LexerResult {
         '/' => return if (peek(lexer) == '/')
             makeError(lexer, "Comments are not permitted in JSON.")
         else
-            makeError(lexer, "Expected JSON object, array or literal."),
-        else => return makeError(lexer, "Expected JSON object, array or literal."),
+            makeError(lexer, DEFAULT_ERROR),
+        else => return makeError(lexer, DEFAULT_ERROR),
     }
 }
 
@@ -188,7 +189,7 @@ fn isAtEnd(lexer: *const Lexer) bool {
     return lexer.current == lexer.lexeme.len;
 }
 
-fn makeError(lexer: *Lexer, cause: str) LexerResult {
+pub fn makeError(lexer: *Lexer, cause: str) LexerResult {
     return .{ .tokenError = .{
         .cause = cause,
         .column = lexer.start,
