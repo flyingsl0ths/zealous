@@ -185,7 +185,7 @@ fn peek(lexer: *const Lexer) char {
     return lexer.lexeme[lexer.current];
 }
 
-fn isAtEnd(lexer: *const Lexer) bool {
+pub fn isAtEnd(lexer: *const Lexer) bool {
     return lexer.current == lexer.lexeme.len;
 }
 

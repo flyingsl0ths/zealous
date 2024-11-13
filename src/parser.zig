@@ -28,43 +28,39 @@ fn parseArray(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Pars
 
     errdefer array.deinit();
 
-    var foundRightBracket = false;
     var comma: ?token.Token = undefined;
 
     while (true) {
         switch (lexer.scan(lexr)) {
             .tokenError => |err| {
                 array.deinit();
-                return ParserResult{ .err = err };
+                return .{ .err = err };
             },
             .token => |tk| {
                 switch (tk.type_) {
-                    .Eof => {
-                        if (!foundRightBracket) {
-                            const message = if (comma != null) "Value expected." else "Expected comma or closing bracket.";
-
-                            const tk_ = comma orelse tk;
-
-                            return .{ .err = .{ .type_ = token.TokenType.Error, .line = tk_.line, .column = tk_.start, .cause = message } };
-                        } else {
-                            const message = if (comma != null and array.items.len > 0) "Trailing comma." else "Value expected.";
-
-                            const tk_ = comma orelse tk;
-
-                            return .{ .err = .{ .type_ = token.TokenType.Error, .line = tk_.line, .column = tk_.start, .cause = message } };
-                        }
-
-                        return .{.{ .array = array }};
-                    },
                     .RightBracket => {
-                        foundRightBracket = true;
+                        return if (comma != null) .{ .err = .{ .type_ = token.TokenType.Error, .line = tk.line, .column = tk.start, .cause = "Trailing comma" } } else .{ .val = .{ .array = array } };
                     },
                     .Comma => {
                         comma = tk;
                     },
+                    .Eof => {
+                        const message = if (comma != null) "Value expected." else "Expected comma or closing bracket.";
+
+                        const tk_ = comma orelse tk;
+
+                        return .{ .err = .{ .type_ = token.TokenType.Error, .line = tk_.line, .column = tk_.start, .cause = message } };
+                    },
                     else => {
-                        const value = try parseValue(allocator, lexr);
-                        array.append(value);
+                        switch (try parseValue(allocator, lexr)) {
+                            .err => |err| {
+                                array.deinit();
+                                return .{ .err = err };
+                            },
+                            .val => |value| {
+                                try array.append(value);
+                            },
+                        }
                     },
                 }
             },
@@ -77,43 +73,22 @@ fn parseObject(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Par
 
     errdefer obj.deinit();
 
-    var foundRightBrace = false;
     var comma: ?token.Token = undefined;
 
     while (true) {
         switch (lexer.scan(lexr)) {
             .tokenError => |err| {
                 obj.deinit();
-                return ParserResult{ .err = err };
+                return .{ .err = err };
             },
             .token => |tk| {
                 switch (tk.type_) {
-                    .Eof => {
-                        if (!foundRightBrace) {
-                            obj.deinit();
-
-                            const message = if (comma != null)
-                                "Property expected."
-                            else
-                                "Expected comma or closing brace.";
-
-                            const tk_ = comma orelse tk;
-
-                            return .{ .err = .{ .line = tk_.line, .column = tk_.start, .cause = message } };
-                        } else {
-                            const message = if (comma != null and obj.count() > 0) "Trailing comma." else "Property expected.";
-
-                            obj.deinit();
-
-                            const tk_ = comma orelse tk;
-
-                            return .{ .err = .{ .line = tk_.line, .column = tk_.start, .cause = message } };
-                        }
-
-                        return object.JsonValue{ .object = obj };
+                    .RightBrace => {
+                        return .{ .val = .{ .object = obj } };
                     },
+
                     .String => {
-                        const key = copyString(allocator, lexr.lexeme[tk.start..tk.length]);
+                        const key = try copyString(allocator, lexr.lexeme[tk.start..tk.length]);
                         switch (lexer.scan(lexr)) {
                             .tokenError => |err| {
                                 obj.deinit();
@@ -122,19 +97,45 @@ fn parseObject(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Par
                             .token => |tk_| {
                                 if (tk_.type_ != .Colon) {
                                     obj.deinit();
-                                    return .{ .err = .{ .line = tk_.line, .column = tk_.start, .cause = "Expected colon." } };
+                                    return .{ .err = .{ .type_ = .Error, .line = tk_.line, .column = tk_.start, .cause = "Colon expected." } };
                                 }
-                                const value = try parseValue(allocator, lexr);
-                                obj.put(key, value);
+                                if (lexer.isAtEnd(lexr)) {
+                                    obj.deinit();
+                                    switch (lexer.scan(lexr)) {
+                                        .token => |tk__| {
+                                            return .{ .err = .{ .type_ = .Error, .line = tk__.line, .column = tk__.start, .cause = "Value expected." } };
+                                        },
+                                        else => unreachable,
+                                    }
+                                } else {
+                                    const value = try parseValue(allocator, lexr);
+                                    obj.put(key, value);
+                                }
                             },
                         }
                     },
-                    .RightBrace => {
-                        foundRightBrace = true;
-                    },
+
                     .Comma => {
                         comma = tk;
                     },
+
+                    .Eof => {
+                        var message: ?[]const u8 = null;
+                        const has_keys = obj.count();
+                        if (comma != null and has_keys) {
+                            message = "Property expected.";
+                        } else if (comma == null and has_keys) {
+                            message = "Expected comma or closing brace";
+                        }
+
+                        obj.deinit();
+
+                        const tk_ = comma orelse tk;
+
+                        return if (message) |message_| .{ .err = .{ .line = tk_.line, .column = tk_.start, .cause = message_ } } else .{ .val = object.JsonValue{ .object = obj } };
+                    },
+
+                    else => unreachable,
                 }
             },
         }
@@ -170,22 +171,22 @@ fn parseValue(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Pars
                 },
                 .String => {
                     const str = lexr.lexeme[tk.start..tk.length];
-                    return .{ .val = .{ .string = copyString(allocator, str) } };
+                    return .{ .val = .{ .string = try copyString(allocator, str) } };
                 },
                 .True => {
                     return .{ .val = .{ .boolean = true } };
                 },
                 .False => {
-                    return .{.{ .boolean = false }};
+                    return .{ .val = .{ .boolean = false } };
                 },
                 .Null => {
-                    return .{.{ .null_ = null }};
+                    return .{ .val = .{ .null_ = object.makeNull() } };
                 },
                 .RightBrace, .RightBracket, .Comma, .Colon => {
-                    return .{ .err = .{ .line = tk.line, .column = tk.start, .cause = "Expected colon." } };
+                    return .{ .err = .{ .line = tk.line, .column = tk.start, .cause = "Expected colon.", .type_ = tk.type_ } };
                 },
                 .Eof => {
-                    return .{.{ .null_ = null }};
+                    return .{ .val = .{ .null_ = object.makeNull() } };
                 },
                 .Error => {
                     unreachable;
