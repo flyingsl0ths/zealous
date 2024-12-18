@@ -17,9 +17,9 @@ pub fn parse(source: lexer.str) ParserError!ParserResult {
     const gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    defer allocator.deinit();
-
-    // TODO: Handle errors
+    // TODO: Handle memory cleanup: implement deinit method for:
+    // - Objects
+    // - Arrays
     return try parseValue(allocator, lexr);
 }
 
@@ -99,17 +99,16 @@ fn parseObject(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Par
                                     obj.deinit();
                                     return .{ .err = .{ .type_ = .Error, .line = tk_.line, .column = tk_.start, .cause = "Colon expected." } };
                                 }
-                                if (lexer.isAtEnd(lexr)) {
-                                    obj.deinit();
-                                    switch (lexer.scan(lexr)) {
-                                        .token => |tk__| {
-                                            return .{ .err = .{ .type_ = .Error, .line = tk__.line, .column = tk__.start, .cause = "Value expected." } };
-                                        },
-                                        else => unreachable,
-                                    }
-                                } else {
-                                    const value = try parseValue(allocator, lexr);
-                                    obj.put(key, value);
+
+                                const val = try parseValue(allocator, lexr);
+                                switch (val) {
+                                    .err => {
+                                        obj.deinit();
+                                        return val;
+                                    },
+                                    .val => |value| {
+                                        try obj.put(key, value);
+                                    },
                                 }
                             },
                         }
@@ -120,11 +119,11 @@ fn parseObject(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Par
                     },
 
                     .Eof => {
-                        var message: ?[]const u8 = null;
-                        const has_keys = obj.count();
-                        if (comma != null and has_keys) {
+                        var message: ?[:0]const u8 = null;
+                        const has_keys = obj.count() != 0;
+                        if ((comma != null and has_keys) or (comma == null and !has_keys)) {
                             message = "Property expected.";
-                        } else if (comma == null and has_keys) {
+                        } else {
                             message = "Expected comma or closing brace";
                         }
 
@@ -132,10 +131,12 @@ fn parseObject(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Par
 
                         const tk_ = comma orelse tk;
 
-                        return if (message) |message_| .{ .err = .{ .line = tk_.line, .column = tk_.start, .cause = message_ } } else .{ .val = object.JsonValue{ .object = obj } };
+                        return if (message) |message_| .{ .err = .{ .type_ = .Error, .line = tk_.line, .column = tk_.start, .cause = message_ } } else .{ .val = .{ .object = obj } };
                     },
 
-                    else => unreachable,
+                    else => {
+                        return .{ .err = .{ .type_ = .Error, .line = tk.line, .column = tk.start, .cause = "Property expected." } };
+                    },
                 }
             },
         }
@@ -180,13 +181,13 @@ fn parseValue(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Pars
                     return .{ .val = .{ .boolean = false } };
                 },
                 .Null => {
-                    return .{ .val = .{ .null_ = object.makeNull() } };
+                    return .{ .val = .{ .null_ = object.mkNull() } };
                 },
                 .RightBrace, .RightBracket, .Comma, .Colon => {
                     return .{ .err = .{ .line = tk.line, .column = tk.start, .cause = "Expected colon.", .type_ = tk.type_ } };
                 },
                 .Eof => {
-                    return .{ .val = .{ .null_ = object.makeNull() } };
+                    return .{ .val = .{ .null_ = object.mkNull() } };
                 },
                 .Error => {
                     unreachable;
@@ -214,7 +215,7 @@ test "Parse literals" {
                 try std.testing.expect(false);
             },
             .val => |val_| {
-                try std.testing.expect(compareObjects(val_, object.JsonValue{ .number = .{ .integer = 10 } }));
+                try std.testing.expect(object.compareObjects(val_, object.JsonValue{ .number = .{ .integer = 10 } }));
             },
         }
     } else |err| {
@@ -229,89 +230,4 @@ test "Parse literals" {
             },
         }
     }
-}
-
-fn compareObjects(expected: object.JsonValue, actual: object.JsonValue) bool {
-    return switch (expected) {
-        .object => |obj| switch (actual) {
-            .object => |obj2| objectsEqual(obj, obj2),
-            else => false,
-        },
-        .array => |arr| switch (actual) {
-            .array => |arr2| arraysEqual(arr, arr2),
-            else => false,
-        },
-        else => valuesEqual(expected, actual),
-    };
-}
-
-fn objectsEqual(expected: std.StringArrayHashMap(object.JsonValue), actual: std.StringArrayHashMap(object.JsonValue)) bool {
-    if (expected.count() != actual.count()) {
-        return false;
-    }
-
-    var equal = false;
-
-    for (expected.items) |pair| {
-        if (actual.get(pair.key)) |actualValue| {
-            equal = valuesEqual(pair.value, actualValue.value);
-            if (!equal) {
-                break;
-            }
-        } else {
-            equal = false;
-            break;
-        }
-    }
-
-    return equal;
-}
-
-fn arraysEqual(expected: std.ArrayList(object.JsonValue), actual: std.ArrayList(object.JsonValue)) bool {
-    if (expected.items.len != actual.items.len) {
-        return false;
-    }
-
-    var equal = false;
-
-    for (expected.items, 0..) |expectedValue, i| {
-        const actualValue = actual.items[i];
-        equal = valuesEqual(expectedValue, actualValue);
-        if (!equal) {
-            break;
-        }
-    }
-
-    return equal;
-}
-
-fn valuesEqual(expected: object.JsonValue, actual: object.JsonValue) bool {
-    return switch (expected) {
-        .number => |num| {
-            switch (actual) {
-                .number => |num2| num.integer == num2.integer,
-                else => false,
-            }
-        },
-        .string => |str| {
-            switch (actual) {
-                .string => |str2| str == str2,
-                else => false,
-            }
-        },
-        .boolean => |b| {
-            switch (actual) {
-                .boolean => |b2| b == b2,
-                else => false,
-            }
-        },
-        .null_ => {
-            switch (actual) {
-                .null_ => true,
-                else => false,
-            }
-        },
-        .object => |obj| objectsEqual(obj, actual),
-        else => false,
-    };
 }
