@@ -5,8 +5,8 @@ const object = @import("object.zig");
 const token = @import("token.zig");
 
 const ParserResult = union(enum) {
-    err: lexer.TokenError,
     val: object.JsonValue,
+    err: lexer.TokenError,
 };
 
 const ParserError = std.fmt.ParseIntError || std.fmt.ParseFloatError || std.mem.Allocator.Error;
@@ -17,9 +17,6 @@ pub fn parse(source: lexer.str) ParserError!ParserResult {
     const gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    // TODO: Handle memory cleanup: implement deinit method for:
-    // - Objects
-    // - Arrays
     return try parseValue(allocator, lexr);
 }
 
@@ -88,7 +85,8 @@ fn parseObject(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Par
                     },
 
                     .String => {
-                        const key = try copyString(allocator, lexr.lexeme[tk.start..tk.length]);
+                        const key = lexr.lexeme[tk.start..tk.length];
+
                         switch (lexer.scan(lexr)) {
                             .tokenError => |err| {
                                 obj.deinit();
@@ -171,8 +169,7 @@ fn parseValue(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Pars
                     return .{ .val = .{ .number = .{ .float = num } } };
                 },
                 .String => {
-                    const str = lexr.lexeme[tk.start..tk.length];
-                    return .{ .val = .{ .string = try copyString(allocator, str) } };
+                    return .{ .val = .{ .string = try object.mkString(allocator, lexr.lexeme[tk.start..tk.length]) } };
                 },
                 .True => {
                     return .{ .val = .{ .boolean = true } };
@@ -181,13 +178,13 @@ fn parseValue(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Pars
                     return .{ .val = .{ .boolean = false } };
                 },
                 .Null => {
-                    return .{ .val = .{ .null_ = object.mkNull() } };
+                    return .{ .val = .{ .null = object.mkNull() } };
                 },
                 .RightBrace, .RightBracket, .Comma, .Colon => {
                     return .{ .err = .{ .line = tk.line, .column = tk.start, .cause = "Expected colon.", .type_ = tk.type_ } };
                 },
                 .Eof => {
-                    return .{ .val = .{ .null_ = object.mkNull() } };
+                    return .{ .val = .{ .null = object.mkNull() } };
                 },
                 .Error => {
                     unreachable;
@@ -197,16 +194,9 @@ fn parseValue(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Pars
     }
 }
 
-fn copyString(allocator: std.mem.Allocator, str: []const u8) ![]u8 {
-    const len = str.len;
-    const copy = try allocator.alloc(u8, len);
-    std.mem.copyForwards(u8, copy, str);
-    return copy;
-}
-
 test "Parse literals" {
     var lxr = lexer.init("10");
-    const res = parseValue(std.testing.allocator, &lxr);
+    var res = parseValue(std.testing.allocator, &lxr);
 
     if (res) |val| {
         switch (val) {
@@ -215,7 +205,7 @@ test "Parse literals" {
                 try std.testing.expect(false);
             },
             .val => |val_| {
-                try std.testing.expect(object.compareObjects(val_, object.JsonValue{ .number = .{ .integer = 10 } }));
+                try std.testing.expect(object.eq(val_, object.JsonValue{ .number = .{ .integer = 10 } }));
             },
         }
     } else |err| {
@@ -225,7 +215,33 @@ test "Parse literals" {
                 try std.testing.expect(false);
             },
             else => {
-                std.debug.print("Wrong kind of error", .{});
+                std.debug.print("Wrong kind of error, expected int parsing error", .{});
+                try std.testing.expect(false);
+            },
+        }
+    }
+
+    lxr = lexer.init("10.1");
+    res = parseValue(std.testing.allocator, &lxr);
+
+    if (res) |val| {
+        switch (val) {
+            .err => |err| {
+                std.debug.print("Error: {}\n", .{err});
+                try std.testing.expect(false);
+            },
+            .val => |val_| {
+                try std.testing.expect(object.eq(val_, object.JsonValue{ .number = .{ .float = 10.1 } }));
+            },
+        }
+    } else |err| {
+        switch (err) {
+            std.fmt.ParseFloatError.InvalidCharacter => {
+                std.debug.print("Expected an floating point number", .{});
+                try std.testing.expect(false);
+            },
+            else => {
+                std.debug.print("Wrong kind of error, expected int parsing error", .{});
                 try std.testing.expect(false);
             },
         }

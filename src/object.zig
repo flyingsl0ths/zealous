@@ -2,43 +2,74 @@ const std = @import("std");
 
 const JsonNil = .{};
 
-pub fn mkNull() @TypeOf(JsonNil) {
-    return JsonNil;
-}
+const JsonString = struct {
+    value: []u8,
+    allocator: std.mem.Allocator,
+
+    fn init(allocator: std.mem.Allocator, value: []const u8) std.mem.Allocator.Error!JsonString {
+        const len = value.len;
+        const copy = try allocator.alloc(u8, len);
+        std.mem.copyForwards(u8, copy, value);
+
+        return JsonString{ .value = copy, .allocator = allocator };
+    }
+
+    fn deinit(self: *JsonString) void {
+        self.allocator.free(self.value);
+    }
+};
 
 pub const JsonValue = union(enum) {
     object: std.StringArrayHashMap(JsonValue),
     array: std.ArrayList(JsonValue),
     number: union(enum) { integer: i32, float: f64 },
-    string: []u8,
+    string: JsonString,
     boolean: bool,
-    null_: @TypeOf(mkNull()),
+    null: @TypeOf(JsonNil),
+
+    fn deinit(self: *JsonValue) void {
+        switch (self.value) {
+            .string => self.value.string.deinit(),
+            .object => self.value.object.deinit(),
+            .array => self.value.array.deinit(),
+            else => unreachable,
+        }
+    }
 };
 
-pub fn compareObjects(expected: JsonValue, actual: JsonValue) bool {
-    return switch (expected) {
-        .object => |obj| switch (actual) {
-            .object => |obj2| objectsEqual(obj, obj2),
-            else => false,
-        },
-        .array => |arr| switch (actual) {
-            .array => |arr2| arraysEqual(arr, arr2),
-            else => false,
-        },
-        else => valuesEqual(expected, actual),
-    };
+pub fn mkNull() @TypeOf(JsonNil) {
+    return JsonNil;
 }
 
-pub fn objectsEqual(expected: std.StringArrayHashMap(JsonValue), actual: std.StringArrayHashMap(JsonValue)) bool {
-    if (expected.count() != actual.count()) {
+pub fn mkString(allocator: std.mem.Allocator, str: []const u8) !JsonString {
+    return JsonString.init(allocator, str);
+}
+
+pub fn eq(lhs: JsonValue, rhs: JsonValue) bool {
+    switch (lhs) {
+        .object => switch (rhs) {
+            .object => return objectsEq(lhs.object, rhs.object),
+            else => return false,
+        },
+
+        .array => switch (rhs) {
+            .array => return arraysEq(lhs.array, rhs.array),
+            else => return false,
+        },
+        else => return valuesEq(lhs, rhs),
+    }
+}
+
+pub fn objectsEq(lhs: std.StringArrayHashMap(JsonValue), rhs: std.StringArrayHashMap(JsonValue)) bool {
+    if (lhs.count() != rhs.count()) {
         return false;
     }
 
     var equal = false;
 
-    for (expected.keys(), expected.values()) |expectedKey, expectedValue| {
-        if (actual.get(expectedKey)) |actualValue| {
-            equal = valuesEqual(expectedValue, actualValue);
+    for (lhs.keys(), lhs.values()) |expectedKey, expectedValue| {
+        if (rhs.get(expectedKey)) |actualValue| {
+            equal = valuesEq(expectedValue, actualValue);
             if (!equal) {
                 break;
             }
@@ -51,16 +82,16 @@ pub fn objectsEqual(expected: std.StringArrayHashMap(JsonValue), actual: std.Str
     return equal;
 }
 
-pub fn arraysEqual(expected: std.ArrayList(JsonValue), actual: std.ArrayList(JsonValue)) bool {
-    if (expected.items.len != actual.items.len) {
+pub fn arraysEq(lhs: std.ArrayList(JsonValue), rhs: std.ArrayList(JsonValue)) bool {
+    if (lhs.items.len != rhs.items.len) {
         return false;
     }
 
     var equal = false;
 
-    for (expected.items, 0..) |expectedValue, i| {
-        const actualValue = actual.items[i];
-        equal = valuesEqual(expectedValue, actualValue);
+    for (lhs.items, 0..) |left, i| {
+        const right = rhs.items[i];
+        equal = valuesEq(left, right);
         if (!equal) {
             break;
         }
@@ -69,36 +100,34 @@ pub fn arraysEqual(expected: std.ArrayList(JsonValue), actual: std.ArrayList(Jso
     return equal;
 }
 
-pub fn valuesEqual(expected: JsonValue, actual: JsonValue) bool {
-    switch (expected) {
-        .number => |num| {
-            switch (actual) {
-                .number => |num2| return num.integer == num2.integer,
+pub fn valuesEq(lhs: JsonValue, rhs: JsonValue) bool {
+    switch (lhs) {
+        .number => {
+            switch (rhs) {
+                .number => switch (lhs.number) {
+                    .integer => switch (rhs.number) {
+                        .integer => return lhs.number.integer == rhs.number.integer,
+                        else => return false,
+                    },
+                    .float => switch (rhs.number) {
+                        .float => return lhs.number.float == rhs.number.float,
+                        else => return false,
+                    },
+                },
                 else => return false,
             }
         },
-        .string => |str| {
-            switch (actual) {
-                .string => |str2| return std.mem.eql(u8, str, str2),
-                else => return false,
-            }
-        },
-        .boolean => |b| {
-            switch (actual) {
-                .boolean => |b2| return b == b2,
-                else => return false,
-            }
-        },
-        .null_ => {
-            switch (actual) {
-                .null_ => return true,
-                else => return false,
-            }
-        },
-        .object => |obj| switch (actual) {
-            .object => |obj2| return objectsEqual(obj, obj2),
+
+        .string => switch (rhs) {
+            .string => return std.mem.eql(u8, lhs.string.value, rhs.string.value),
             else => return false,
         },
-        else => return false,
+
+        .boolean => switch (rhs) {
+            .boolean => return lhs.boolean == rhs.boolean,
+            else => return false,
+        },
+
+        else => unreachable,
     }
 }
