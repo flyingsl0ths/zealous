@@ -191,7 +191,7 @@ fn parseValue(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Pars
     }
 }
 
-test "Parse literals" {
+test "Parse numeric literals" {
     var lxr = lexer.init("10");
     var res = parseValue(std.testing.allocator, &lxr);
 
@@ -238,9 +238,218 @@ test "Parse literals" {
                 try std.testing.expect(false);
             },
             else => {
+                std.debug.print("Wrong kind of error, expected float parsing error", .{});
+                try std.testing.expect(false);
+            },
+        }
+    }
+
+    lxr = lexer.init("-10");
+    res = parseValue(std.testing.allocator, &lxr);
+
+    if (res) |val| {
+        switch (val) {
+            .err => |err| {
+                std.debug.print("Error: {}\n", .{err});
+                try std.testing.expect(false);
+            },
+            .val => |val_| {
+                try std.testing.expect(object.eq(val_, object.JsonValue{ .number = .{ .integer = -10 } }));
+            },
+        }
+    } else |err| {
+        switch (err) {
+            std.fmt.ParseIntError.Overflow, std.fmt.ParseIntError.InvalidCharacter => {
+                std.debug.print("Expected an integer", .{});
+                try std.testing.expect(false);
+            },
+            else => {
                 std.debug.print("Wrong kind of error, expected int parsing error", .{});
                 try std.testing.expect(false);
             },
+        }
+    }
+
+    lxr = lexer.init("-10.1");
+    res = parseValue(std.testing.allocator, &lxr);
+
+    if (res) |val| {
+        switch (val) {
+            .err => |err| {
+                std.debug.print("Error: {}\n", .{err});
+                try std.testing.expect(false);
+            },
+            .val => |val_| {
+                try std.testing.expect(object.eq(val_, object.JsonValue{ .number = .{ .float = -10.1 } }));
+            },
+        }
+    } else |err| {
+        switch (err) {
+            std.fmt.ParseFloatError.InvalidCharacter => {
+                std.debug.print("Expected an floating point number", .{});
+                try std.testing.expect(false);
+            },
+            else => {
+                std.debug.print("Wrong kind of error, expected float parsing error", .{});
+                try std.testing.expect(false);
+            },
+        }
+    }
+
+    lxr = lexer.init("1e10");
+    res = parseValue(std.testing.allocator, &lxr);
+
+    if (res) |val| {
+        switch (val) {
+            .err => |err| {
+                std.debug.print("Error: {}\n", .{err});
+                try std.testing.expect(false);
+            },
+            .val => |val_| {
+                try std.testing.expect(object.eq(val_, object.JsonValue{ .number = .{ .float = 1e10 } }));
+            },
+        }
+    } else |err| {
+        switch (err) {
+            std.fmt.ParseFloatError.InvalidCharacter => {
+                std.debug.print("Expected an floating point number", .{});
+                try std.testing.expect(false);
+            },
+            else => {
+                std.debug.print("Wrong kind of error, expected float parsing error", .{});
+                try std.testing.expect(false);
+            },
+        }
+    }
+
+    lxr = lexer.init("1E10");
+    res = parseValue(std.testing.allocator, &lxr);
+
+    if (res) |val| {
+        switch (val) {
+            .err => |err| {
+                std.debug.print("Error: {}\n", .{err});
+                try std.testing.expect(false);
+            },
+            .val => |val_| {
+                try std.testing.expect(object.eq(val_, object.JsonValue{ .number = .{ .float = 1E10 } }));
+            },
+        }
+    } else |err| {
+        switch (err) {
+            std.fmt.ParseFloatError.InvalidCharacter => {
+                std.debug.print("Expected an floating point number", .{});
+                try std.testing.expect(false);
+            },
+            else => {
+                std.debug.print("Wrong kind of error, expected float parsing error", .{});
+                try std.testing.expect(false);
+            },
+        }
+    }
+
+    lxr = lexer.init("-1e10");
+    res = parseValue(std.testing.allocator, &lxr);
+
+    if (res) |val| {
+        switch (val) {
+            .err => |err| {
+                std.debug.print("Error: {}\n", .{err});
+                try std.testing.expect(false);
+            },
+            .val => |val_| {
+                try std.testing.expect(object.eq(val_, object.JsonValue{ .number = .{ .float = -1e10 } }));
+            },
+        }
+    } else |err| {
+        switch (err) {
+            std.fmt.ParseFloatError.InvalidCharacter => {
+                std.debug.print("Expected an floating point number", .{});
+                try std.testing.expect(false);
+            },
+            else => {
+                std.debug.print("Wrong kind of error, expected float parsing error", .{});
+                try std.testing.expect(false);
+            },
+        }
+    }
+
+    lxr = lexer.init("1e+10");
+    res = parseValue(std.testing.allocator, &lxr);
+
+    if (res) |val| {
+        switch (val) {
+            .err => |err| {
+                std.debug.print("Error: {}\n", .{err});
+                try std.testing.expect(false);
+            },
+            .val => |val_| {
+                try std.testing.expect(object.eq(val_, object.JsonValue{ .number = .{ .float = 1e+10 } }));
+            },
+        }
+    } else |err| {
+        switch (err) {
+            std.fmt.ParseFloatError.InvalidCharacter => {
+                std.debug.print("Expected an floating point number", .{});
+                try std.testing.expect(false);
+            },
+            else => {
+                std.debug.print("Wrong kind of error, expected float parsing error", .{});
+                try std.testing.expect(false);
+            },
+        }
+    }
+
+    lxr = lexer.init("1e-10");
+    res = parseValue(std.testing.allocator, &lxr);
+
+    if (res) |val| {
+        switch (val) {
+            .err => |err| {
+                std.debug.print("Error: {}\n", .{err});
+                try std.testing.expect(false);
+            },
+            .val => |val_| {
+                try std.testing.expect(object.eq(val_, object.JsonValue{ .number = .{ .float = 1e-10 } }));
+            },
+        }
+    } else |err| {
+        switch (err) {
+            std.fmt.ParseFloatError.InvalidCharacter => {
+                std.debug.print("Expected an floating point number", .{});
+                try std.testing.expect(false);
+            },
+            else => {
+                std.debug.print("Wrong kind of error, expected float parsing error", .{});
+                try std.testing.expect(false);
+            },
+        }
+    }
+}
+
+test "Parse boolean literals" {
+    inline for (.{ "true", "false" }) |source| {
+        var lxr = lexer.init(source);
+        const res = parseValue(std.testing.allocator, &lxr);
+
+        if (res) |val| {
+            switch (val) {
+                .err => |err| {
+                    std.debug.print("Error: {}\n", .{err});
+                    try std.testing.expect(false);
+                },
+                .val => |val_| {
+                    try std.testing.expect(object.eq(val_, object.JsonValue{ .boolean = if (std.mem.eql(u8, source, "true")) true else false }));
+                },
+            }
+        } else |err| {
+            switch (err) {
+                std.mem.Allocator.Error.OutOfMemory => {
+                    std.debug.print("Out of memory!", .{});
+                    try std.testing.expect(false);
+                },
+                else => unreachable,
+            }
         }
     }
 }
