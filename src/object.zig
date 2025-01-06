@@ -110,7 +110,7 @@ pub fn valuesEq(lhs: JsonValue, rhs: JsonValue) bool {
                         else => return false,
                     },
                     .float => switch (rhs.number) {
-                        .float => return lhs.number.float == rhs.number.float,
+                        .float => return std.math.approxEqRel(f64, lhs.number.float, rhs.number.float, std.math.sqrt(std.math.floatEps(f64))),
                         else => return false,
                     },
                 },
