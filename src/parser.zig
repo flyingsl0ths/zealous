@@ -180,13 +180,10 @@ fn parseValue(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Pars
                 .Null => {
                     return .{ .val = .{ .null = object.mkNull() } };
                 },
-                .RightBrace, .RightBracket, .Comma, .Colon => {
-                    return .{ .err = .{ .line = tk.line, .column = tk.start, .cause = "Expected colon.", .type_ = tk.type_ } };
-                },
                 .Eof => {
                     return .{ .val = .{ .null = object.mkNull() } };
                 },
-                .Error => {
+                else => {
                     unreachable;
                 },
             }
