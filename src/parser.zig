@@ -453,3 +453,28 @@ test "Parse boolean literals" {
         }
     }
 }
+
+test "Parse null" {
+    var lxr = lexer.init("null");
+    const res = parseValue(std.testing.allocator, &lxr);
+
+    if (res) |val| {
+        switch (val) {
+            .err => |err| {
+                std.debug.print("Error: {}\n", .{err});
+                try std.testing.expect(false);
+            },
+            .val => |val_| {
+                try std.testing.expect(object.eq(val_, object.mkNull()));
+            },
+        }
+    } else |err| {
+        switch (err) {
+            std.mem.Allocator.Error.OutOfMemory => {
+                std.debug.print("Out of memory!", .{});
+                try std.testing.expect(false);
+            },
+            else => unreachable,
+        }
+    }
+}
