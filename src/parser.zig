@@ -178,10 +178,10 @@ fn parseValue(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Pars
                     return .{ .val = .{ .boolean = false } };
                 },
                 .Null => {
-                    return .{ .val = .{ .null = object.mkNull() } };
+                    return .{ .val = object.mkNull() };
                 },
                 .Eof => {
-                    return .{ .val = .{ .null = object.mkNull() } };
+                    return .{ .val = object.mkNull() };
                 },
                 else => {
                     unreachable;

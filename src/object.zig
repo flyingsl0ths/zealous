@@ -37,8 +37,8 @@ pub const JsonValue = union(enum) {
     }
 };
 
-pub fn mkNull() @TypeOf(JsonNil) {
-    return JsonNil;
+pub fn mkNull() JsonValue {
+    return .{ .null = JsonNil };
 }
 
 pub fn mkString(allocator: std.mem.Allocator, str: []const u8) !JsonString {
@@ -125,6 +125,11 @@ pub fn valuesEq(lhs: JsonValue, rhs: JsonValue) bool {
 
         .boolean => switch (rhs) {
             .boolean => return lhs.boolean == rhs.boolean,
+            else => return false,
+        },
+
+        .null => switch (rhs) {
+            .null => return true,
             else => return false,
         },
 
