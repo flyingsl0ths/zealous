@@ -482,7 +482,7 @@ test "Parse null" {
 }
 
 test "Parse array" {
-    var lxr = lexer.init("[true]");
+    var lxr = lexer.init("[1,true]");
     const res = parseValue(std.testing.allocator, &lxr);
 
     if (res) |val| {
@@ -494,17 +494,17 @@ test "Parse array" {
             .val => |val_| {
                 var array = std.ArrayList(object.JsonValue).init(std.testing.allocator);
 
-                try array.append(.{ .boolean = true });
-
                 defer array.deinit();
                 errdefer array.deinit();
+
+                try array.append(.{ .number = .{ .integer = 1 } });
+                try array.append(.{ .boolean = true });
 
                 const equal = object.eq(val_, .{ .array = array });
 
                 switch (val_) {
                     .array => |arr| {
                         arr.deinit();
-                        errdefer arr.deinit();
                         try std.testing.expect(equal);
                     },
                     else => unreachable,
