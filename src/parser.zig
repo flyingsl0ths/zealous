@@ -30,7 +30,6 @@ fn parseArray(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Pars
     while (true) {
         switch (lexer.scan(lexr)) {
             .tokenError => |err| {
-                std.debug.print("Error: {}", .{err});
                 array.deinit();
                 return .{ .err = err };
             },
@@ -150,7 +149,6 @@ fn parseValue(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Pars
             return .{ .err = err };
         },
         .token => |tk| {
-            std.debug.print("{}\n", .{tk});
             return toValue(allocator, tk, lexr);
         },
     }
@@ -501,13 +499,13 @@ test "Parse array" {
                 defer array.deinit();
                 errdefer array.deinit();
 
-                const were_equal = object.eq(val_, .{ .array = array });
+                const equal = object.eq(val_, .{ .array = array });
 
                 switch (val_) {
                     .array => |arr| {
                         arr.deinit();
                         errdefer arr.deinit();
-                        try std.testing.expect(were_equal);
+                        try std.testing.expect(equal);
                     },
                     else => unreachable,
                 }

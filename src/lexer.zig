@@ -45,7 +45,7 @@ pub fn scan(lexer: *Lexer) LexerResult {
 
     if (c == '-' or isDigit(c)) return number(lexer);
 
-    if (isAlpha(c)) return literal(lexer);
+    if (isStartOfLiteral(c)) return literal(lexer);
 
     switch (c) {
         '{' => return makeToken(lexer, tk.TokenType.LeftBrace),
@@ -91,6 +91,10 @@ fn isAlpha(ch: char) bool {
     return (ch >= 'a' and ch <= 'z') or (ch >= 'A' and ch <= 'Z');
 }
 
+fn isStartOfLiteral(ch: char) bool {
+    return (ch == 't') or (ch == 'f') or (ch == 'n');
+}
+
 fn number(lexer: *Lexer) LexerResult {
     var isFloat = false;
 
@@ -121,23 +125,25 @@ fn literal(lexer: *Lexer) LexerResult {
     while (isAlpha(peek(lexer))) advance_(lexer);
 
     return switch (literalType(lexer)) {
-        tk.TokenType.Error => makeError(lexer, "Expected JSON object, array or literal."),
+        tk.TokenType.Error => makeError(lexer, DEFAULT_ERROR),
         else => |type_| makeToken(lexer, type_),
     };
 }
 
 fn literalType(lexer: *Lexer) tk.TokenType {
     return switch (lexer.lexeme[lexer.start]) {
-        'f' => checkSubstring(lexer, 1, 5, "alse", tk.TokenType.False),
-        't' => checkSubstring(lexer, 1, 4, "rue", tk.TokenType.True),
-        'n' => checkSubstring(lexer, 1, 4, "ull", tk.TokenType.Null),
+        'f' => checkSubstring(lexer, 1, 4, "alse", tk.TokenType.False),
+        't' => checkSubstring(lexer, 1, 3, "rue", tk.TokenType.True),
+        'n' => checkSubstring(lexer, 1, 3, "ull", tk.TokenType.Null),
         else => tk.TokenType.Error,
     };
 }
 
 fn checkSubstring(lexer: *Lexer, start: usize, length: usize, rest: str, type_: tk.TokenType) tk.TokenType {
-    const matched = lexer.current == start + length - 1 and
-        std.mem.eql(u8, lexer.lexeme[(lexer.start + start)..length], rest);
+    const lexer_start = lexer.start + start;
+
+    const matched = lexer.current - lexer.start == start + length and
+        std.mem.eql(u8, lexer.lexeme[lexer_start..(lexer_start + length)], rest);
 
     return if (matched) type_ else tk.TokenType.Error;
 }
@@ -148,6 +154,12 @@ fn peekNext(lexer: *const Lexer) char {
 
 fn advance_(lexer: *Lexer) void {
     lexer.current += 1;
+}
+
+fn advance_n_(lexer: *Lexer, n: usize) void {
+    for (0..n) |_| {
+        advance_(lexer);
+    }
 }
 
 fn makeToken(lexer: *Lexer, type_: tk.TokenType) LexerResult {
@@ -339,6 +351,35 @@ test "Numbers" {
     expected = .{ .length = 4, .line = 1, .start = 0, .type_ = tk.TokenType.Float };
     try std.testing.expect(switch (scan(&lexr)) {
         .token => |token| matches(token, expected),
+        .tokenError => false,
+    });
+}
+
+test "Arrays" {
+    var lexr = init("[1,true]");
+
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, .{ .length = 1, .line = 1, .start = 0, .type_ = tk.TokenType.LeftBracket }),
+        .tokenError => false,
+    });
+
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, .{ .length = 1, .line = 1, .start = 1, .type_ = tk.TokenType.Int }),
+        .tokenError => false,
+    });
+
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, .{ .length = 1, .line = 1, .start = 2, .type_ = tk.TokenType.Comma }),
+        .tokenError => false,
+    });
+
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, .{ .length = 4, .line = 1, .start = 3, .type_ = tk.TokenType.True }),
+        .tokenError => false,
+    });
+
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, .{ .length = 1, .line = 1, .start = 7, .type_ = tk.TokenType.RightBracket }),
         .tokenError => false,
     });
 }
