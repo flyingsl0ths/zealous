@@ -154,7 +154,47 @@ fn parseValue(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Pars
     }
 }
 
-test "Parse numeric literals" {
+fn toValue(allocator: std.mem.Allocator, tk: token.Token, lexr: *lexer.Lexer) ParserError!ParserResult {
+    switch (tk.type_) {
+        .LeftBracket => {
+            const arr = try parseArray(allocator, lexr);
+            return arr;
+        },
+        .LeftBrace => {
+            const obj = try parseObject(allocator, lexr);
+            return obj;
+        },
+        .Int => {
+            const str = lexr.lexeme[tk.start .. tk.start + tk.length];
+
+            const num = try std.fmt.parseInt(i32, str, 10);
+            return .{ .val = .{ .number = .{ .integer = num } } };
+        },
+        .Float => {
+            const str = lexr.lexeme[tk.start..tk.length];
+            const num = try std.fmt.parseFloat(f64, str);
+            return .{ .val = .{ .number = .{ .float = num } } };
+        },
+        .String => {
+            return .{ .val = try object.mkString(allocator, lexr.lexeme[tk.start..tk.length]) };
+        },
+        .True => {
+            return .{ .val = .{ .boolean = true } };
+        },
+        .False => {
+            return .{ .val = .{ .boolean = false } };
+        },
+        .Null => {
+            return .{ .val = object.mkNull() };
+        },
+        .Eof => {
+            return .{ .val = object.mkNull() };
+        },
+        else => unreachable,
+    }
+}
+
+test "Numbers" {
     var lxr = lexer.init("10");
     var res = parseValue(std.testing.allocator, &lxr);
 
@@ -389,47 +429,7 @@ test "Parse numeric literals" {
     }
 }
 
-fn toValue(allocator: std.mem.Allocator, tk: token.Token, lexr: *lexer.Lexer) ParserError!ParserResult {
-    switch (tk.type_) {
-        .LeftBracket => {
-            const arr = try parseArray(allocator, lexr);
-            return arr;
-        },
-        .LeftBrace => {
-            const obj = try parseObject(allocator, lexr);
-            return obj;
-        },
-        .Int => {
-            const str = lexr.lexeme[tk.start .. tk.start + tk.length];
-
-            const num = try std.fmt.parseInt(i32, str, 10);
-            return .{ .val = .{ .number = .{ .integer = num } } };
-        },
-        .Float => {
-            const str = lexr.lexeme[tk.start..tk.length];
-            const num = try std.fmt.parseFloat(f64, str);
-            return .{ .val = .{ .number = .{ .float = num } } };
-        },
-        .String => {
-            return .{ .val = .{ .string = try object.mkString(allocator, lexr.lexeme[tk.start..tk.length]) } };
-        },
-        .True => {
-            return .{ .val = .{ .boolean = true } };
-        },
-        .False => {
-            return .{ .val = .{ .boolean = false } };
-        },
-        .Null => {
-            return .{ .val = object.mkNull() };
-        },
-        .Eof => {
-            return .{ .val = object.mkNull() };
-        },
-        else => unreachable,
-    }
-}
-
-test "Parse boolean literals" {
+test "Bool" {
     inline for (.{ "true", "false" }) |source| {
         var lxr = lexer.init(source);
         const res = parseValue(std.testing.allocator, &lxr);
@@ -456,7 +456,7 @@ test "Parse boolean literals" {
     }
 }
 
-test "Parse null" {
+test "Null" {
     var lxr = lexer.init("null");
     const res = parseValue(std.testing.allocator, &lxr);
 
@@ -481,7 +481,37 @@ test "Parse null" {
     }
 }
 
-test "Parse array" {
+test "Strings" {
+    var lxr = lexer.init("\"hello\"");
+
+    if (parseValue(std.testing.allocator, &lxr)) |val| {
+        switch (val) {
+            .err => |err| {
+                std.debug.print("Error: {}\n", .{err});
+                try std.testing.expect(false);
+            },
+            .val => |val_| {
+                const str = try object.mkString(std.testing.allocator, "\"hello\"");
+
+                defer object.deinit(str);
+                errdefer object.deinit(str);
+                defer object.deinit(val_);
+
+                try std.testing.expect(object.eq(val_, str));
+            },
+        }
+    } else |err| {
+        switch (err) {
+            std.mem.Allocator.Error.OutOfMemory => {
+                std.debug.print("Out of memory!", .{});
+                try std.testing.expect(false);
+            },
+            else => unreachable,
+        }
+    }
+}
+
+test "Arrays" {
     var lxr = lexer.init("[1,true]");
     const res = parseValue(std.testing.allocator, &lxr);
 
