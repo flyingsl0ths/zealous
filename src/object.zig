@@ -14,7 +14,7 @@ const JsonString = struct {
         return JsonString{ .value = copy, .allocator = allocator };
     }
 
-    fn deinit(self: *JsonString) void {
+    inline fn deinit(self: JsonString) void {
         self.allocator.free(self.value);
     }
 };
@@ -26,23 +26,41 @@ pub const JsonValue = union(enum) {
     string: JsonString,
     boolean: bool,
     null: @TypeOf(JsonNil),
-
-    fn deinit(self: *JsonValue) void {
-        switch (self.value) {
-            .string => self.value.string.deinit(),
-            .object => self.value.object.deinit(),
-            .array => self.value.array.deinit(),
-            else => unreachable,
-        }
-    }
 };
 
-pub fn mkNull() JsonValue {
+pub inline fn mkNull() JsonValue {
     return .{ .null = JsonNil };
 }
 
-pub fn mkString(allocator: std.mem.Allocator, str: []const u8) !JsonString {
-    return JsonString.init(allocator, str);
+pub inline fn mkString(allocator: std.mem.Allocator, str: []const u8) std.mem.Allocator.Error!JsonValue {
+    return .{ .string = try JsonString.init(allocator, str) };
+}
+
+pub fn deinit(self: JsonValue) void {
+    switch (self) {
+        .object => |*obj| {
+            var obj_ = obj.*;
+            while (obj_.popOrNull()) |entry| {
+                deinit(entry.value);
+                obj_.allocator.free(entry.key);
+            }
+
+            obj_.clearAndFree();
+            obj_.deinit();
+        },
+
+        .string => |str| str.deinit(),
+
+        .array => |arr| {
+            for (arr.items) |item| {
+                deinit(item);
+            }
+
+            arr.deinit();
+        },
+
+        else => {},
+    }
 }
 
 pub fn eq(lhs: JsonValue, rhs: JsonValue) bool {
