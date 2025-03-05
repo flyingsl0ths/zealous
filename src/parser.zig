@@ -66,22 +66,22 @@ fn parseArray(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Pars
 }
 
 fn parseObject(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!ParserResult {
-    var obj = std.StringArrayHashMap(object.JsonValue).init(allocator);
+    var obj: object.JsonValue = .{ .object = std.StringArrayHashMap(object.JsonValue).init(allocator) };
 
-    errdefer obj.deinit();
+    errdefer object.deinit(obj);
 
     var comma: ?token.Token = undefined;
 
     while (true) {
         switch (lexer.scan(lexr)) {
             .tokenError => |err| {
-                obj.deinit();
+                object.deinit(obj);
                 return .{ .err = err };
             },
             .token => |tk| {
                 switch (tk.type_) {
                     .RightBrace => {
-                        return .{ .val = .{ .object = obj } };
+                        return .{ .val = obj };
                     },
 
                     .String => {
@@ -89,23 +89,23 @@ fn parseObject(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Par
 
                         switch (lexer.scan(lexr)) {
                             .tokenError => |err| {
-                                obj.deinit();
+                                object.deinit(obj);
                                 return .{ .err = err };
                             },
                             .token => |tk_| {
                                 if (tk_.type_ != .Colon) {
-                                    obj.deinit();
+                                    object.deinit(obj);
                                     return .{ .err = .{ .type_ = .Error, .line = tk_.line, .column = tk_.start, .cause = "Colon expected." } };
                                 }
 
                                 const val = try parseValue(allocator, lexr);
                                 switch (val) {
                                     .err => {
-                                        obj.deinit();
+                                        object.deinit(obj);
                                         return val;
                                     },
                                     .val => |value| {
-                                        try obj.put(key, value);
+                                        try obj.object.put(key, value);
                                     },
                                 }
                             },
@@ -118,18 +118,20 @@ fn parseObject(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Par
 
                     .Eof => {
                         var message: ?[:0]const u8 = null;
-                        const has_keys = obj.count() != 0;
+
+                        const has_keys = obj.object.count() != 0;
+
                         if ((comma != null and has_keys) or (comma == null and !has_keys)) {
                             message = "Property expected.";
                         } else {
                             message = "Expected comma or closing brace";
                         }
 
-                        obj.deinit();
+                        object.deinit(obj);
 
                         const tk_ = comma orelse tk;
 
-                        return if (message) |message_| .{ .err = .{ .type_ = .Error, .line = tk_.line, .column = tk_.start, .cause = message_ } } else .{ .val = .{ .object = obj } };
+                        return if (message) |message_| .{ .err = .{ .type_ = .Error, .line = tk_.line, .column = tk_.start, .cause = message_ } } else .{ .val = obj };
                     },
 
                     else => {
@@ -140,7 +142,7 @@ fn parseObject(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Par
         }
     }
 
-    return .{ .val = .{ .object = obj } };
+    return .{ .val = obj };
 }
 
 fn parseValue(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!ParserResult {
