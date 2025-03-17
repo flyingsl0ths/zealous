@@ -210,6 +210,20 @@ pub fn makeError(lexer: *Lexer, cause: str) LexerResult {
     } };
 }
 
+test "Whitespace" {
+    var lexr = init(" \t\r\n");
+
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, .{
+            .length = 0,
+            .line = 2,
+            .start = 4,
+            .type_ = tk.TokenType.Eof,
+        }),
+        .tokenError => false,
+    });
+}
+
 test "Single tokenization" {
     var lexr = init("{");
     var expected: tk.Token = .{ .length = 1, .line = 1, .start = 0, .type_ = tk.TokenType.LeftBrace };
@@ -256,20 +270,6 @@ test "Single tokenization" {
 
     try std.testing.expect(switch (scan(&lexr)) {
         .token => |token| matches(token, expected),
-        .tokenError => false,
-    });
-}
-
-test "Whitespace" {
-    var lexr = init(" \t\r\n");
-
-    try std.testing.expect(switch (scan(&lexr)) {
-        .token => |token| matches(token, .{
-            .length = 0,
-            .line = 2,
-            .start = 4,
-            .type_ = tk.TokenType.Eof,
-        }),
         .tokenError => false,
     });
 }
@@ -355,6 +355,35 @@ test "Numbers" {
     });
 }
 
+test "Strings" {
+    var lexr = init("\"h\"");
+    var expected: tk.Token = .{ .length = 3, .line = 1, .start = 0, .type_ = tk.TokenType.String };
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, expected),
+        .tokenError => false,
+    });
+
+    lexr = init("\"h\n\"");
+    expected = .{ .length = 4, .line = 2, .start = 0, .type_ = tk.TokenType.String };
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, expected),
+        .tokenError => false,
+    });
+
+    lexr = init("\"h\r\n\"");
+    expected = .{ .length = 5, .line = 2, .start = 0, .type_ = tk.TokenType.String };
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, expected),
+        .tokenError => false,
+    });
+
+    lexr = init("\"h");
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => false,
+        .tokenError => true,
+    });
+}
+
 test "Arrays" {
     var lexr = init("[1,true]");
 
@@ -384,32 +413,44 @@ test "Arrays" {
     });
 }
 
-test "Strings" {
-    var lexr = init("\"h\"");
-    var expected: tk.Token = .{ .length = 3, .line = 1, .start = 0, .type_ = tk.TokenType.String };
+test "Objects" {
+    var lexr = init("{}");
+
     try std.testing.expect(switch (scan(&lexr)) {
-        .token => |token| matches(token, expected),
+        .token => |token| matches(token, .{ .length = 1, .line = 1, .start = 0, .type_ = tk.TokenType.LeftBrace }),
         .tokenError => false,
     });
 
-    lexr = init("\"h\n\"");
-    expected = .{ .length = 4, .line = 2, .start = 0, .type_ = tk.TokenType.String };
     try std.testing.expect(switch (scan(&lexr)) {
-        .token => |token| matches(token, expected),
+        .token => |token| matches(token, .{ .length = 1, .line = 1, .start = 1, .type_ = tk.TokenType.RightBrace }),
         .tokenError => false,
     });
 
-    lexr = init("\"h\r\n\"");
-    expected = .{ .length = 5, .line = 2, .start = 0, .type_ = tk.TokenType.String };
+    lexr = init("{\"hello\":\n\"world\"}");
+
     try std.testing.expect(switch (scan(&lexr)) {
-        .token => |token| matches(token, expected),
+        .token => |token| matches(token, .{ .length = 1, .line = 1, .start = 0, .type_ = tk.TokenType.LeftBrace }),
         .tokenError => false,
     });
 
-    lexr = init("\"h");
     try std.testing.expect(switch (scan(&lexr)) {
-        .token => false,
-        .tokenError => true,
+        .token => |token| matches(token, .{ .length = 7, .line = 1, .start = 1, .type_ = tk.TokenType.String }),
+        .tokenError => false,
+    });
+
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, .{ .length = 1, .line = 1, .start = 8, .type_ = tk.TokenType.Colon }),
+        .tokenError => false,
+    });
+
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, .{ .length = 7, .line = 2, .start = 10, .type_ = tk.TokenType.String }),
+        .tokenError => false,
+    });
+
+    try std.testing.expect(switch (scan(&lexr)) {
+        .token => |token| matches(token, .{ .length = 1, .line = 2, .start = 17, .type_ = tk.TokenType.RightBrace }),
+        .tokenError => false,
     });
 }
 
