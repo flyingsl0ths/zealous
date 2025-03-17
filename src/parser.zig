@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const utils = @import("utils.zig");
 const lexer = @import("lexer.zig");
 const object = @import("object.zig");
 const token = @import("token.zig");
@@ -99,13 +100,15 @@ fn parseObject(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Par
                                 }
 
                                 const val = try parseValue(allocator, lexr);
+
                                 switch (val) {
                                     .err => {
                                         object.deinit(obj);
                                         return val;
                                     },
                                     .val => |value| {
-                                        try obj.object.put(key, value);
+                                        const key_: []const u8 = try utils.copyBytes(allocator, key);
+                                        try obj.object.put(key_, value);
                                     },
                                 }
                             },

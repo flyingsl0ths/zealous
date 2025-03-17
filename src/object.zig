@@ -1,17 +1,15 @@
 const std = @import("std");
+const utils = @import("utils.zig");
 
 const JsonNil = .{};
 
 const JsonString = struct {
-    value: []u8,
+    value: []const u8,
     allocator: std.mem.Allocator,
 
     fn init(allocator: std.mem.Allocator, value: []const u8) std.mem.Allocator.Error!JsonString {
-        const len = value.len;
-        const copy = try allocator.alloc(u8, len);
-        std.mem.copyForwards(u8, copy, value);
-
-        return JsonString{ .value = copy, .allocator = allocator };
+        const slice = try utils.copyBytes(allocator, value);
+        return JsonString{ .value = slice, .allocator = allocator };
     }
 
     inline fn deinit(self: JsonString) void {
