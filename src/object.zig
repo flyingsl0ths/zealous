@@ -1,15 +1,18 @@
 const std = @import("std");
 const utils = @import("utils.zig");
 
+const Map = std.StringArrayHashMap;
+const ArrayList = std.ArrayList;
+
 const JsonNil = .{};
+const Number = union(enum) { integer: i32, float: f64 };
 
 const JsonString = struct {
     value: []const u8,
     allocator: std.mem.Allocator,
 
-    fn init(allocator: std.mem.Allocator, value: []const u8) std.mem.Allocator.Error!JsonString {
-        const slice = try utils.copyBytes(allocator, value);
-        return JsonString{ .value = slice, .allocator = allocator };
+    inline fn init(allocator: std.mem.Allocator, value: []const u8) std.mem.Allocator.Error!JsonString {
+        return JsonString{ .value = try utils.copyBytes(allocator, value), .allocator = allocator };
     }
 
     inline fn deinit(self: JsonString) void {
@@ -18,9 +21,9 @@ const JsonString = struct {
 };
 
 pub const JsonValue = union(enum) {
-    object: std.StringArrayHashMap(JsonValue),
-    array: std.ArrayList(JsonValue),
-    number: union(enum) { integer: i32, float: f64 },
+    object: Map(JsonValue),
+    array: ArrayList(JsonValue),
+    number: Number,
     string: JsonString,
     boolean: bool,
     null: @TypeOf(JsonNil),
@@ -36,29 +39,36 @@ pub inline fn mkString(allocator: std.mem.Allocator, str: []const u8) std.mem.Al
 
 pub fn deinit(self: JsonValue) void {
     switch (self) {
-        .object => |*obj| {
-            var obj_ = obj.*;
-            while (obj_.popOrNull()) |entry| {
-                deinit(entry.value);
-                obj_.allocator.free(entry.key);
-            }
+        .object => |*obj| deinitObject(obj),
 
-            obj_.clearAndFree();
-            obj_.deinit();
-        },
+        .array => |*arr| deinitArray(arr),
 
         .string => |str| str.deinit(),
 
-        .array => |arr| {
-            for (arr.items) |item| {
-                deinit(item);
-            }
-
-            arr.deinit();
-        },
-
-        else => {},
+        else => unreachable,
     }
+}
+
+fn deinitObject(obj: *const Map(JsonValue)) void {
+    var obj_ = obj.*;
+
+    while (obj_.popOrNull()) |entry| {
+        deinit(entry.value);
+        obj_.allocator.free(entry.key);
+    }
+
+    obj_.clearAndFree();
+    obj_.deinit();
+}
+
+fn deinitArray(arr: *const ArrayList(JsonValue)) void {
+    var arr_ = arr.*;
+
+    for (arr_.items) |item| {
+        deinit(item);
+    }
+
+    arr_.deinit();
 }
 
 pub fn eq(lhs: JsonValue, rhs: JsonValue) bool {
@@ -72,11 +82,12 @@ pub fn eq(lhs: JsonValue, rhs: JsonValue) bool {
             .array => return arraysEq(lhs.array, rhs.array),
             else => return false,
         },
+
         else => return valuesEq(lhs, rhs),
     }
 }
 
-pub fn objectsEq(lhs: std.StringArrayHashMap(JsonValue), rhs: std.StringArrayHashMap(JsonValue)) bool {
+fn objectsEq(lhs: Map(JsonValue), rhs: Map(JsonValue)) bool {
     if (lhs.count() != rhs.count()) {
         return false;
     }
@@ -98,7 +109,7 @@ pub fn objectsEq(lhs: std.StringArrayHashMap(JsonValue), rhs: std.StringArrayHas
     return equal;
 }
 
-pub fn arraysEq(lhs: std.ArrayList(JsonValue), rhs: std.ArrayList(JsonValue)) bool {
+fn arraysEq(lhs: ArrayList(JsonValue), rhs: ArrayList(JsonValue)) bool {
     if (lhs.items.len != rhs.items.len) {
         return false;
     }
@@ -116,7 +127,7 @@ pub fn arraysEq(lhs: std.ArrayList(JsonValue), rhs: std.ArrayList(JsonValue)) bo
     return equal;
 }
 
-pub fn valuesEq(lhs: JsonValue, rhs: JsonValue) bool {
+fn valuesEq(lhs: JsonValue, rhs: JsonValue) bool {
     switch (lhs) {
         .number => {
             switch (rhs) {
@@ -125,8 +136,9 @@ pub fn valuesEq(lhs: JsonValue, rhs: JsonValue) bool {
                         .integer => return lhs.number.integer == rhs.number.integer,
                         else => return false,
                     },
+
                     .float => switch (rhs.number) {
-                        .float => return std.math.approxEqRel(f64, lhs.number.float, rhs.number.float, std.math.sqrt(std.math.floatEps(f64))),
+                        .float => return utils.floatEq(f64, lhs.number.float, rhs.number.float),
                         else => return false,
                     },
                 },
