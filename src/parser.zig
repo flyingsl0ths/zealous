@@ -22,22 +22,22 @@ pub fn parse(source: lexer.str) ParserError!ParserResult {
 }
 
 fn parseArray(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!ParserResult {
-    var array = std.ArrayList(object.JsonValue).init(allocator);
+    var arr = std.ArrayList(object.JsonValue).init(allocator);
 
-    errdefer array.deinit();
+    errdefer arr.deinit();
 
     var comma: ?token.Token = undefined;
 
     while (true) {
         switch (lexer.scan(lexr)) {
             .tokenError => |err| {
-                array.deinit();
+                arr.deinit();
                 return .{ .err = err };
             },
             .token => |tk| {
                 switch (tk.type_) {
                     .RightBracket => {
-                        return if (comma) |comma_| .{ .err = .{ .type_ = token.TokenType.Error, .line = comma_.line, .column = comma_.start, .cause = "Trailing comma" } } else .{ .val = .{ .array = array } };
+                        return if (comma) |comma_| .{ .err = .{ .type_ = token.TokenType.Error, .line = comma_.line, .column = comma_.start, .cause = "Trailing comma" } } else .{ .val = .{ .array = arr } };
                     },
                     .Comma => {
                         comma = tk;
@@ -55,7 +55,7 @@ fn parseArray(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Pars
                                 return .{ .err = err };
                             },
                             .val => |value| {
-                                try array.append(value);
+                                try arr.append(value);
                                 comma = null;
                             },
                         }
@@ -86,7 +86,7 @@ fn parseObject(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Par
                     },
 
                     .String => {
-                        const key = lexr.lexeme[tk.start..tk.length];
+                        const key = lexr.lexeme[tk.start..(tk.start + tk.length)];
 
                         switch (lexer.scan(lexr)) {
                             .tokenError => |err| {
@@ -107,7 +107,7 @@ fn parseObject(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!Par
                                         return val;
                                     },
                                     .val => |value| {
-                                        const key_: []const u8 = try utils.copyBytes(allocator, key);
+                                        const key_: []u8 = try utils.copyBytes(allocator, key);
                                         try obj.object.put(key_, value);
                                     },
                                 }
@@ -181,7 +181,7 @@ fn toValue(allocator: std.mem.Allocator, tk: token.Token, lexr: *lexer.Lexer) Pa
             return .{ .val = .{ .number = .{ .float = num } } };
         },
         .String => {
-            return .{ .val = try object.mkString(allocator, lexr.lexeme[tk.start..tk.length]) };
+            return .{ .val = try object.mkString(allocator, lexr.lexeme[tk.start..(tk.start + tk.length)]) };
         },
         .True => {
             return .{ .val = .{ .boolean = true } };
@@ -517,33 +517,59 @@ test "Strings" {
 }
 
 test "Arrays" {
-    var lxr = lexer.init("[1,true]");
-    const res = parseValue(std.testing.allocator, &lxr);
-
-    if (res) |val| {
+    var lxr = lexer.init("[1, true, \"hello\"]");
+    if (parseValue(std.testing.allocator, &lxr)) |val| {
         switch (val) {
             .err => |err| {
                 std.debug.print("Error: {}\n", .{err});
                 try std.testing.expect(false);
             },
             .val => |val_| {
-                var array = std.ArrayList(object.JsonValue).init(std.testing.allocator);
+                var js = std.ArrayList(object.JsonValue).init(std.testing.allocator);
 
-                defer array.deinit();
-                errdefer array.deinit();
+                defer object.deinit(val_);
+                defer object.deinit(.{ .array = js });
+                errdefer object.deinit(.{ .array = js });
 
-                try array.append(.{ .number = .{ .integer = 1 } });
-                try array.append(.{ .boolean = true });
+                try js.append(.{ .number = .{ .integer = 1 } });
+                try js.append(.{ .boolean = true });
+                try js.append(try object.mkString(std.testing.allocator, "\"hello\""));
 
-                const equal = object.eq(val_, .{ .array = array });
+                try std.testing.expect(object.eq(val_, .{ .array = js }));
+            },
+        }
+    } else |err| {
+        switch (err) {
+            std.mem.Allocator.Error.OutOfMemory => {
+                std.debug.print("Out of memory!", .{});
+                try std.testing.expect(false);
+            },
+            else => unreachable,
+        }
+    }
+}
 
-                switch (val_) {
-                    .array => |arr| {
-                        arr.deinit();
-                        try std.testing.expect(equal);
-                    },
-                    else => unreachable,
-                }
+test "Objects" {
+    var lxr = lexer.init("{\"hello\":\n\"world\", \"foo\": 1}");
+
+    const t_alloc = std.testing.allocator;
+    if (parseValue(t_alloc, &lxr)) |val| {
+        switch (val) {
+            .err => |err| {
+                std.debug.print("Error: {}\n", .{err});
+                try std.testing.expect(false);
+            },
+            .val => |val_| {
+                var obj = std.StringArrayHashMap(object.JsonValue).init(t_alloc);
+
+                defer object.deinit(val_);
+                defer object.deinit(.{ .object = obj });
+                errdefer object.deinit(.{ .object = obj });
+
+                try obj.put(try utils.copyBytes(t_alloc, "\"hello\""), try object.mkString(t_alloc, "\"world\""));
+                try obj.put(try utils.copyBytes(t_alloc, "\"foo\""), .{ .number = .{ .integer = 1 } });
+
+                try std.testing.expect(object.eq(val_, .{ .object = obj }));
             },
         }
     } else |err| {
