@@ -12,13 +12,10 @@ const ParserResult = union(enum) {
 
 const ParserError = std.fmt.ParseIntError || std.fmt.ParseFloatError || std.mem.Allocator.Error;
 
-pub fn parse(source: lexer.str) ParserError!ParserResult {
-    const lexr = lexer.init(source);
+pub fn parse(source: lexer.str, allocator: std.mem.Allocator) ParserError!ParserResult {
+    var lexr = lexer.init(source);
 
-    const gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
-
-    return try parseValue(allocator, lexr);
+    return try parseValue(allocator, &lexr);
 }
 
 fn parseArray(allocator: std.mem.Allocator, lexr: *lexer.Lexer) ParserError!ParserResult {
