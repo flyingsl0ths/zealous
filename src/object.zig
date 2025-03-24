@@ -45,7 +45,7 @@ pub fn deinit(self: JsonValue) void {
 
         .string => |str| str.deinit(),
 
-        else => unreachable,
+        else => {},
     }
 }
 
