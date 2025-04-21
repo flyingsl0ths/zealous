@@ -7,9 +7,6 @@ pub fn copyBytes(allocator: std.mem.Allocator, value: []const u8) std.mem.Alloca
     return copy;
 }
 
-pub fn floatEq(comptime T: type, lhs: T, rhs: T) bool {
-    return switch (@typeInfo(T)) {
-        .Float => std.math.approxEqRel(T, lhs, rhs, std.math.sqrt(std.math.floatEps(T))),
-        else => false,
-    };
+pub inline fn floatEq(lhs: f64, rhs: f64) bool {
+    return std.math.approxEqRel(f64, lhs, rhs, std.math.sqrt(std.math.floatEps(f64)));
 }

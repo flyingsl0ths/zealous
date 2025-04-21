@@ -52,7 +52,7 @@ pub fn deinit(self: JsonValue) void {
 fn deinitObject(obj: *const Map(JsonValue)) void {
     var obj_ = obj.*;
 
-    while (obj_.popOrNull()) |entry| {
+    while (obj_.pop()) |entry| {
         deinit(entry.value);
         obj_.allocator.free(entry.key);
     }
@@ -138,7 +138,7 @@ fn valuesEq(lhs: JsonValue, rhs: JsonValue) bool {
                     },
 
                     .float => switch (rhs.number) {
-                        .float => return utils.floatEq(f64, lhs.number.float, rhs.number.float),
+                        .float => return utils.floatEq(lhs.number.float, rhs.number.float),
                         else => return false,
                     },
                 },
